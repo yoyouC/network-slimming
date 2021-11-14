@@ -166,6 +166,7 @@ for layer_id in range(len(old_modules)):
             if layer_id_in_cfg < len(cfg_mask):
                 end_mask = cfg_mask[layer_id_in_cfg]
         else:
+            # Cases where BN2d layer is following Conv2d layer that is not the first in bottleneck
             m1.weight.data = m0.weight.data[idx1.tolist()].clone()
             m1.bias.data = m0.bias.data[idx1.tolist()].clone()
             m1.running_mean = m0.running_mean[idx1.tolist()].clone()
@@ -176,6 +177,7 @@ for layer_id in range(len(old_modules)):
                 end_mask = cfg_mask[layer_id_in_cfg]
     elif isinstance(m0, nn.Conv2d):
         if conv_count == 0:
+            # Do not prune first conv2d layer
             m1.weight.data = m0.weight.data.clone()
             conv_count += 1
             continue
@@ -197,6 +199,9 @@ for layer_id in range(len(old_modules)):
             if conv_count % 3 != 1:
                 w1 = w1[idx1.tolist(), :, :, :].clone()
             m1.weight.data = w1.clone()
+            # This sounds reasonable, but it will mean that the filters of the last Conv2d in the residual block
+            # will not be pruned. Considering pruned the filter as well and use padding to remain the original 
+            # dimention of the residual block output.
             continue
 
         # We need to consider the case where there are downsampling convolutions. 
