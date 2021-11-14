@@ -47,11 +47,15 @@ if args.model:
         print("=> no checkpoint found at '{}'".format(args.model))
 
 print(model)
+
+# Total number of channels in the model
 total = 0
 for m in model.modules():
     if isinstance(m, nn.BatchNorm2d):
+        # Number of channels in each BN2d layer
         total += m.weight.data.shape[0]
 
+# Torch storing gamma scalers for all BN2d layers
 bn = torch.zeros(total)
 index = 0
 for m in model.modules():
@@ -62,6 +66,7 @@ for m in model.modules():
 
 y, i = torch.sort(bn)
 thre_index = int(total * args.percent)
+# Threadshold of gamma, channels lower than this will be pruned
 thre = y[thre_index]
 
 pruned = 0
@@ -70,17 +75,23 @@ cfg_mask = []
 for k, m in enumerate(model.modules()):
     if isinstance(m, nn.BatchNorm2d):
         weight_copy = m.weight.data.abs().clone()
+        # mask of channels for a given BN2d layer
         mask = weight_copy.gt(thre).float().cuda()
+        # add number of channels pruned in the current BN2d layer
         pruned = pruned + mask.shape[0] - torch.sum(mask)
+        # apply mask
         m.weight.data.mul_(mask)
         m.bias.data.mul_(mask)
+        # cfg: array holding number of channel remained for each Conv2d layer
         cfg.append(int(torch.sum(mask)))
+        # cfg_mask: array holding mask of channel for each Conv2d layer
         cfg_mask.append(mask.clone())
         print('layer index: {:d} \t total channel: {:d} \t remaining channel: {:d}'.
             format(k, mask.shape[0], int(torch.sum(mask))))
     elif isinstance(m, nn.MaxPool2d):
         cfg.append('M')
 
+# number of pruned channels / total number of channels
 pruned_ratio = pruned/total
 
 print('Pre-processing Successful!')
@@ -136,7 +147,9 @@ start_mask = torch.ones(3)
 end_mask = cfg_mask[layer_id_in_cfg]
 for [m0, m1] in zip(model.modules(), newmodel.modules()):
     if isinstance(m0, nn.BatchNorm2d):
+        # array carrying indexes of channels remained
         idx1 = np.squeeze(np.argwhere(np.asarray(end_mask.cpu().numpy())))
+        # change dimension for to_list operation
         if idx1.size == 1:
             idx1 = np.resize(idx1,(1,))
         m1.weight.data = m0.weight.data[idx1.tolist()].clone()
@@ -150,12 +163,15 @@ for [m0, m1] in zip(model.modules(), newmodel.modules()):
     elif isinstance(m0, nn.Conv2d):
         idx0 = np.squeeze(np.argwhere(np.asarray(start_mask.cpu().numpy())))
         idx1 = np.squeeze(np.argwhere(np.asarray(end_mask.cpu().numpy())))
+        # print input channel num and output channel num
         print('In shape: {:d}, Out shape {:d}.'.format(idx0.size, idx1.size))
         if idx0.size == 1:
             idx0 = np.resize(idx0, (1,))
         if idx1.size == 1:
             idx1 = np.resize(idx1, (1,))
+        # drop filter weights correspond to dropped channel in previous layer
         w1 = m0.weight.data[:, idx0.tolist(), :, :].clone()
+        # drop output filter correspond to dropped channel in the next layer
         w1 = w1[idx1.tolist(), :, :, :].clone()
         m1.weight.data = w1.clone()
     elif isinstance(m0, nn.Linear):
