@@ -17,15 +17,17 @@ class vgg(nn.Module):
     def __init__(self, dataset='cifar10', depth=19, init_weights=True, cfg=None):
         super(vgg, self).__init__()
         if cfg is None:
-            cfg = defaultcfg[depth]
+            self.cfg = defaultcfg[depth]
+        else:
+            self.cfg = cfg
 
-        self.feature = self.make_layers(cfg, True)
+        self.feature = self.make_layers(self.cfg, True)
 
         if dataset == 'cifar10':
             num_classes = 10
         elif dataset == 'cifar100':
             num_classes = 100
-        self.classifier = nn.Linear(cfg[-1], num_classes)
+        self.classifier = nn.Linear(self.cfg[-1], num_classes)
         if init_weights:
             self._initialize_weights()
 
