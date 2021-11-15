@@ -31,16 +31,21 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 if not os.path.exists(args.save):
     os.makedirs(args.save)
 
-model = resnet(depth=args.depth, dataset=args.dataset)
+# need to load cfg
+model = None
 
-if args.cuda:
-    model.cuda()
 if args.model:
     if os.path.isfile(args.model):
         print("=> loading checkpoint '{}'".format(args.model))
         checkpoint = torch.load(args.model)
         args.start_epoch = checkpoint['epoch']
         best_prec1 = checkpoint['best_prec1']
+        cfg = checkpoint['cfg']
+
+        model = resnet(depth=args.depth, dataset=args.dataset, cfg=cfg)
+        if args.cuda:
+            model.cuda()
+            
         model.load_state_dict(checkpoint['state_dict'])
         print("=> loaded checkpoint '{}' (epoch {}) Prec1: {:f}"
               .format(args.model, checkpoint['epoch'], best_prec1))

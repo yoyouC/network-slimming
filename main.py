@@ -97,12 +97,17 @@ else:
                        ])),
         batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
+cfg = None
+
 if args.refine:
     checkpoint = torch.load(args.refine)
-    model = models.__dict__[args.arch](dataset=args.dataset, depth=args.depth, cfg=checkpoint['cfg'])
+    cfg = checkpoint['cfg']
+    model = models.__dict__[args.arch](dataset=args.dataset, depth=args.depth, cfg=cfg)
     model.load_state_dict(checkpoint['state_dict'])
 else:
+    # set cfg = None or set to default cfg
     model = models.__dict__[args.arch](dataset=args.dataset, depth=args.depth)
+    cfg = model.cfg
 
 if args.cuda:
     model.cuda()
@@ -180,7 +185,9 @@ for epoch in range(args.start_epoch, args.epochs):
     prec1 = test()
     is_best = prec1 > best_prec1
     best_prec1 = max(prec1, best_prec1)
+    # save cfg as well
     save_checkpoint({
+        'cfg': cfg,
         'epoch': epoch + 1,
         'state_dict': model.state_dict(),
         'best_prec1': best_prec1,
