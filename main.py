@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
+from tqdm import tqdm
 import models
 
 
@@ -135,22 +136,21 @@ def updateBN():
 
 def train(epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        if args.cuda:
-            data, target = data.cuda(), target.cuda()
-        data, target = Variable(data), Variable(target)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.cross_entropy(output, target)
-        pred = output.data.max(1, keepdim=True)[1]
-        loss.backward()
-        if args.sr:
-            updateBN()
-        optimizer.step()
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.data))
+
+    with tqdm(train_loader, unit="item") as tepoch:
+        for data, target in tepoch:
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            data, target = Variable(data), Variable(target)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = F.cross_entropy(output, target)
+            pred = output.data.max(1, keepdim=True)[1]
+            loss.backward()
+            if args.sr:
+                updateBN()
+            optimizer.step()
+            tepoch.set_postfix(loss=loss.item())
 
 def test():
     model.eval()
