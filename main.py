@@ -138,6 +138,7 @@ def train(epoch):
     model.train()
 
     with tqdm(train_loader, unit="item") as tepoch:
+        tepoch.set_description(f"Epoch {epoch}")
         for data, target in tepoch:
             if args.cuda:
                 data, target = data.cuda(), target.cuda()
