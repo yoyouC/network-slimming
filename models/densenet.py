@@ -71,29 +71,31 @@ class densenet(nn.Module):
             for _ in range(3):
                 cfg.append([start + growthRate*i for i in range(n+1)])
                 start += growthRate*n
-            cfg = [item for sub_list in cfg for item in sub_list]
+            self.cfg = [item for sub_list in cfg for item in sub_list]
+        else:
+            self.cfg = cfg
 
-        assert len(cfg) == 3*n+3, 'length of config variable cfg should be 3n+3'
+        assert len(self.cfg) == 3*n+3, 'length of config variable cfg should be 3n+3'
 
         # self.inplanes is a global variable used across multiple
         # helper functions
         self.inplanes = growthRate * 2
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, padding=1,
                                bias=False)
-        self.dense1 = self._make_denseblock(block, n, cfg[0:n])
-        self.trans1 = self._make_transition(compressionRate, cfg[n])
-        self.dense2 = self._make_denseblock(block, n, cfg[n+1:2*n+1])
-        self.trans2 = self._make_transition(compressionRate, cfg[2*n+1])
-        self.dense3 = self._make_denseblock(block, n, cfg[2*n+2:3*n+2])
+        self.dense1 = self._make_denseblock(block, n, self.cfg[0:n])
+        self.trans1 = self._make_transition(compressionRate, self.cfg[n])
+        self.dense2 = self._make_denseblock(block, n, self.cfg[n+1:2*n+1])
+        self.trans2 = self._make_transition(compressionRate, self.cfg[2*n+1])
+        self.dense3 = self._make_denseblock(block, n, self.cfg[2*n+2:3*n+2])
         self.bn = nn.BatchNorm2d(self.inplanes)
         self.select = channel_selection(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.avgpool = nn.AvgPool2d(8)
 
         if dataset == 'cifar10':
-            self.fc = nn.Linear(cfg[-1], 10)
+            self.fc = nn.Linear(self.cfg[-1], 10)
         elif dataset == 'cifar100':
-            self.fc = nn.Linear(cfg[-1], 100)
+            self.fc = nn.Linear(self.cfg[-1], 100)
 
         # Weight initialization
         for m in self.modules():
