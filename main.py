@@ -51,6 +51,12 @@ parser.add_argument('--arch', default='vgg', type=str,
                     help='architecture to use')
 parser.add_argument('--depth', default=19, type=int,
                     help='depth of the neural network')
+parser.add_argument('--teacher', default='', type=str, metavar='PATH',
+                    help='path to the teacher model for knowledge distillation')
+parser.add_argument('--alpha', default=0.5, type=float, metavar='N',
+                    help='alpha for knowledge distillation')
+parser.add_argument('--T', default=3, type=int, metavar='N',
+                    help='temperature for knowledge distillation')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -110,9 +116,19 @@ else:
     model = models.__dict__[args.arch](dataset=args.dataset, depth=args.depth)
     cfg = model.cfg
 
+if args.teacher:
+    t_checkpoint = torch.load(args.teacher)
+    t_cfg = t_checkpoint['cfg']
+    teacher = models.__dict__[args.arch](dataset=args.dataset, cfg=cfg)
+    teacher.load_state_dict(t_checkpoint['state_dict'])
+
 if args.cuda:
     model.cuda()
+    # help: enough memory to accomodate?
+    if args.teacher:
+        teacher.cuda()
 
+# help: does momentum and weight decay affect knowledge distillation?
 optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
 if args.resume:
@@ -153,6 +169,45 @@ def train(epoch):
             optimizer.step()
             tepoch.set_postfix(loss=loss.item())
 
+def distill(epoch):
+    model.train()
+    teacher.eval()
+
+    with tqdm(train_loader, unit="item") as tepoch:
+        tepoch.set_description(f"Epoch {epoch}")
+        for data, target in tepoch:
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            data, target = Variable(data), Variable(target)
+            optimizer.zero_grad()
+            output = model(data)
+
+            with torch.no_grad():
+                teacher_output = teacher(data)
+            if args.cuda:
+                teacher_output = teacher_output.cuda()
+
+            loss = loss_fn_kd(output, target, teacher_output, args.T, args.alpha)
+            
+            loss.backward()
+            if args.sr:
+                updateBN()
+            optimizer.step()
+            tepoch.set_postfix(loss=loss.item())
+
+def loss_fn_kd(outputs, labels, teacher_outputs, alpha, T):
+    """
+    Compute the knowledge-distillation (KD) loss given outputs, labels.
+    "Hyperparameters": temperature and alpha
+    NOTE: the KL Divergence for PyTorch comparing the softmaxs of teacher
+    and student expects the input tensor to be log probabilities! See Issue #2
+    """
+    KD_loss = nn.KLDivLoss()(F.log_softmax(outputs/T, dim=1),
+                             F.softmax(teacher_outputs/T, dim=1)) * (alpha * T * T) + \
+              F.cross_entropy(outputs, labels) * (1. - alpha)
+
+    return KD_loss
+
 def test():
     model.eval()
     test_loss = 0
@@ -179,10 +234,16 @@ def save_checkpoint(state, is_best, filepath):
 
 best_prec1 = 0.
 for epoch in range(args.start_epoch, args.epochs):
+    # help: why change learning rate?
     if epoch in [args.epochs*0.5, args.epochs*0.75]:
         for param_group in optimizer.param_groups:
             param_group['lr'] *= 0.1
-    train(epoch)
+    
+    if not args.teacher:
+        train(epoch)
+    else:
+        distill(epoch)
+
     prec1 = test()
     is_best = prec1 > best_prec1
     best_prec1 = max(prec1, best_prec1)
