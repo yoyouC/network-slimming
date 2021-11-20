@@ -57,7 +57,7 @@ parser.add_argument('--alpha', default=0.5, type=float, metavar='N',
                     help='alpha for knowledge distillation')
 parser.add_argument('--T', default=3, type=int, metavar='N',
                     help='temperature for knowledge distillation')
-parser.add_argument('--sractch', action='store_true', default=False,
+parser.add_argument('--sractch', dest='scratch', action='store_true', default=False,
                     help='refine or distill from scratch')
 
 args = parser.parse_args()
