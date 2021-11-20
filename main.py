@@ -57,6 +57,8 @@ parser.add_argument('--alpha', default=0.5, type=float, metavar='N',
                     help='alpha for knowledge distillation')
 parser.add_argument('--T', default=3, type=int, metavar='N',
                     help='temperature for knowledge distillation')
+parser.add_argument('--sractch', action='store_true', default=False,
+                    help='refine or distill from scratch')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -110,7 +112,8 @@ if args.refine:
     checkpoint = torch.load(args.refine)
     cfg = checkpoint['cfg']
     model = models.__dict__[args.arch](dataset=args.dataset, depth=args.depth, cfg=cfg)
-    model.load_state_dict(checkpoint['state_dict'])
+    if not args.scratch:
+        model.load_state_dict(checkpoint['state_dict'])
 else:
     # set cfg = None or set to default cfg
     model = models.__dict__[args.arch](dataset=args.dataset, depth=args.depth)
