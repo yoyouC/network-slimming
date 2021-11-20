@@ -195,7 +195,7 @@ def distill(epoch):
             optimizer.step()
             tepoch.set_postfix(loss=loss.item())
 
-def loss_fn_kd(outputs, labels, teacher_outputs, alpha, T):
+def loss_fn_kd(outputs, labels, teacher_outputs, T, alpha):
     """
     Compute the knowledge-distillation (KD) loss given outputs, labels.
     "Hyperparameters": temperature and alpha
